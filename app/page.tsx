@@ -7,168 +7,168 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Список контактов (можешь менять имена на любые другие)
-const CONTACTS = ['Dmitry', 'Ivan', 'Sasha', 'Mama', 'Admin']
-
 export default function Messenger() {
+  const [view, setView] = useState<'auth' | 'dashboard' | 'chat'>('auth')
+  const [isRegister, setIsRegister] = useState(false)
+  
+  // Данные пользователя
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [myUser, setMyUser] = useState<any>(null)
+  
+  // Данные чата
+  const [targetNick, setTargetNick] = useState('')
+  const [activeChat, setActiveChat] = useState<string | null>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [text, setText] = useState('')
-  const [myId, setMyId] = useState<string | null>(null)
-  const [activeChat, setActiveChat] = useState<string | null>(null)
+  
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Загружаем имя пользователя из памяти браузера
-  useEffect(() => {
-    const savedName = localStorage.getItem('chat-username')
-    if (savedName) setMyId(savedName)
-  }, [])
+  // 1. ЛОГИКА АВТОРИЗАЦИИ
+  const handleAuth = async () => {
+    if (isRegister) {
+      const { error } = await supabase.from('profiles').insert([{ username, password }])
+      if (error) return alert("Этот ник уже занят!")
+      alert("Регистрация успешна! Теперь войдите.")
+      setIsRegister(false)
+    } else {
+      const { data, error } = await supabase.from('profiles')
+        .select('*').eq('username', username).eq('password', password).single()
+      if (data) {
+        setMyUser(data)
+        setView('dashboard')
+      } else {
+        alert("Неверный логин или пароль")
+      }
+    }
+  }
 
-  // Уникальный ID комнаты для пары пользователей (сортировка нужна, чтобы у обоих был один ID)
-  const chatId = activeChat ? [myId, activeChat].sort().join('--') : null
+  // 2. ЛОГИКА ЧАТА
+  const chatId = activeChat ? [myUser.username, activeChat].sort().join('--') : null
 
-  // Подписка на новые сообщения в конкретном чате
   useEffect(() => {
     if (!chatId) return
+    const fetchMessages = async () => {
+      const { data } = await supabase.from('messages').select('*').eq('chat_id', chatId).order('created_at', { ascending: true })
+      if (data) setMessages(data)
+    }
     fetchMessages()
 
-    const channel = supabase.channel(`chat-${chatId}`)
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, 
-        (payload) => setMessages((prev) => [...prev, payload.new])
-      ).subscribe()
+    const channel = supabase.channel(chatId).on('postgres_changes', 
+      { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, 
+      (payload) => setMessages((prev) => [...prev, payload.new])
+    ).subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [chatId])
 
-  // Автопрокрутка вниз
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
-
-  const fetchMessages = async () => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true })
-    if (data) setMessages(data)
-  }
-
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!text.trim() || !myId || !chatId) return
-    await supabase.from('messages').insert([{ text, sender_name: myId, chat_id: chatId }])
+    if (!text.trim()) return
+    await supabase.from('messages').insert([{ text, sender_name: myUser.username, chat_id: chatId }])
     setText('')
   }
 
-  // --- ЭКРАН 1: ВХОД ---
-  if (!myId) {
+  // --- ИНТЕРФЕЙС ---
+
+  // ЭКРАН 1: ВХОД / РЕГИСТРАЦИЯ
+  if (view === 'auth') {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-slate-50 p-6">
-        <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center border border-slate-100">
-          <h1 className="text-3xl font-black mb-2 text-blue-600">Messenger</h1>
-          <p className="text-slate-400 mb-6 text-sm">Введите ваше имя, чтобы начать</p>
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-900 p-6 text-white">
+        <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-slate-700">
+          <h1 className="text-3xl font-black mb-6 text-center text-blue-400">
+            {isRegister ? 'Создать аккаунт' : 'С возвращением'}
+          </h1>
           <input 
-            type="text" 
-            placeholder="Ваше имя..." 
-            className="w-full p-4 bg-slate-100 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-400 transition-all"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const name = e.currentTarget.value.trim()
-                if (name) {
-                  localStorage.setItem('chat-username', name)
-                  setMyId(name)
-                }
-              }
-            }}
+            className="w-full p-4 bg-slate-700 rounded-2xl mb-3 outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Никнейм" 
+            onChange={e => setUsername(e.target.value)}
           />
-          <p className="text-[10px] text-slate-300 uppercase font-bold tracking-widest">Нажмите Enter для входа</p>
-        </div>
-      </div>
-    )
-  }
-
-  // --- ЭКРАН 2: СПИСОК КОНТАКТОВ ---
-  if (!activeChat) {
-    return (
-      <div className="flex flex-col h-screen bg-white max-w-md mx-auto border-x shadow-2xl">
-        <div className="p-6 bg-white border-b flex justify-between items-end">
-          <h1 className="text-3xl font-bold text-slate-900">Чаты</h1>
-          <button 
-            onClick={() => {localStorage.clear(); window.location.reload()}} 
-            className="text-xs text-red-400 font-medium hover:text-red-600 transition-colors"
-          >
-            Выйти ({myId})
+          <input 
+            type="password"
+            className="w-full p-4 bg-slate-700 rounded-2xl mb-6 outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Пароль" 
+            onChange={e => setPassword(e.target.value)}
+          />
+          <button onClick={handleAuth} className="w-full bg-blue-600 p-4 rounded-2xl font-bold hover:bg-blue-500 transition-all">
+            {isRegister ? 'Зарегистрироваться' : 'Войти'}
           </button>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {CONTACTS.filter(c => c !== myId).map(contact => (
-            <div 
-              key={contact} 
-              onClick={() => setActiveChat(contact)}
-              className="p-4 m
-
-
-x-2 my-1 rounded-2xl hover:bg-slate-50 cursor-pointer flex items-center gap-4 transition-colors"
-            >
-              <div className="w-14 h-14 bg-gradient-to-tr from-blue-500 to-blue-400 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-100">
-                {contact[0]}
-              </div>
-              <div className="flex-1 border-b border-slate-50 pb-2">
-                <p className="font-bold text-slate-800">{contact}</p>
-                <p className="text-xs text-slate-400 truncate">Нажмите, чтобы открыть переписку</p>
-              </div>
-            </div>
-          ))}
+          <p onClick={() => setIsRegister(!isRegister)} className="mt-4 text-center text-sm text-slate-400 cursor-pointer hover:text-white">
+            {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Создать'}
+          </p>
         </div>
       </div>
     )
   }
 
-  // --- ЭКРАН 3: ОКНО ЧАТА ---
-  return (
-    <div className="flex flex-col h-screen bg-slate-50 max-w-md mx-auto border-x shadow-2xl">
-      <div className="p-4 bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b flex items-center gap-4">
-        <button onClick={() => {setActiveChat(null); setMessages([])}} className="text-blue-500 p-2 hover:bg-blue-50 rounded-xl transition-colors">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        </button>
-        <div>
-          <h2 className="font-bold text-slate-800 leading-tight">{activeChat}</h2>
-          <p className="text-[10px] text-green-500 font-bold uppercase tracking-wider">в сети</p>
+  // ЭКРАН 2: ГЛАВНОЕ ОКНО (ПОИСК ЧАТА)
+  if (view === 'dashboard') {
+    return (
+      <div className="flex flex-col h-screen bg-slate-50 max-w-md mx-auto sh
+
+
+adow-2xl border-x">
+        <div className="p-6 bg-white border-b flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-slate-800">Мессенджер</h1>
+          <button onClick={() => setView('auth')} className="text-red-400 text-xs font-bold">Выйти</button>
+        </div>
+        <div className="p-10 flex flex-col items-center justify-center flex-1">
+          <div className="w-20 h-20 bg-blue-100 rounded-3xl flex items-center justify-center text-blue-600 text-3xl mb-4 font-bold uppercase">
+            {myUser.username[0]}
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-8 text-center tracking-tight">Привет, {myUser.username}!</h2>
+          
+          <div className="w-full space-y-4">
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest text-center">Начать новый чат</p>
+            <input 
+              className="w-full p-4 bg-white border border-slate-200 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Введите ник друга..." 
+              value={targetNick}
+              onChange={e => setTargetNick(e.target.value)}
+            />
+            <button 
+              onClick={() => { if(targetNick) { setActiveChat(targetNick); setView('chat') } }}
+              className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold hover:bg-slate-800 transition-all"
+            >
+              Открыть переписку
+            </button>
+          </div>
         </div>
       </div>
+    )
+  }
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg) => {
-          const isMe = msg.sender_name === myId
+  // ЭКРАН 3: ОКНО ЧАТА
+  return (
+    <div className="flex flex-col h-screen bg-white max-w-md mx-auto border-x shadow-2xl">
+      <div className="p-4 border-b flex items-center gap-4 bg-white sticky top-0 z-10">
+        <button onClick={() => setView('dashboard')} className="text-blue-500 font-bold">←</button>
+        <div>
+          <p className="font-black text-slate-800 leading-none">{activeChat}</p>
+          <p className="text-[10px] text-slate-400 uppercase font-bold mt-1">Чат активен</p>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+        {messages.map((msg: any) => {
+          const isMe = msg.sender_name === myUser.username
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 px-4 shadow-sm ${
-                isMe 
-                ? 'bg-blue-600 text-white rounded-3xl rounded-tr-none shadow-blue-100' 
-                : 'bg-white text-slate-800 rounded-3xl rounded-tl-none border border-slate-100'
-              }`}>
-                <p className="text-sm leading-relaxed">{msg.text}</p>
-                <p className={`text-[9px] mt-1 text-right opacity-60`}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
+              <div className={`p-3 px-4 rounded-2xl max-w-[80%] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'}`}>
+                <p className="text-sm">{msg.text}</p>
               </div>
             </div>
           )
         })}
         <div ref={messagesEndRef} />
       </div>
-
-      <form onSubmit={sendMessage} className="p-4 bg-white border-t flex gap-2 items-center">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Ваше сообщение..."
-          className="flex-1 p-3 bg-slate-100 rounded-2xl px-5 outline-none focus:bg-slate-200 transition-all text-sm"
+      <form onSubmit={sendMessage} className="p-4 bg-white border-t flex gap-2">
+        <input 
+          className="flex-1 bg-slate-100 p-3 rounded-xl outline-none px-4"
+          placeholder="Написать..." 
+          value={text} 
+          onChange={e => setText(e.target.value)} 
         />
-        <button className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 transition-transform active:scale-95">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-        </button>
+        <button className="bg-blue-600 text-white w-12 h-12 rounded-xl font-bold shadow-lg shadow-blue-100"»</button>
       </form>
     </div>
   )
