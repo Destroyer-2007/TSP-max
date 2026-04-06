@@ -124,7 +124,7 @@ www.nextbrand.com
   if (view === 'dashboard') return (
     <div className="max-w-md mx-auto h-screen bg-white flex flex-col shadow-2xl">
       <div className="p-6 border-b flex justify-between items-center bg-slate-50">
-        <span className="font-bold text-xl text-slate-800">Messenger</span>
+        <span className="font-bold text-xl text-slate-800">TSP chat</span>
         <button onClick={() => setView('auth')} className="text-red-500 font-bold text-xs">ВЫХОД</button>
       </div>
       <div className="p-4 border-b space-y-2">
