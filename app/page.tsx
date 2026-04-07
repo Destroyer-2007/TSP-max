@@ -34,13 +34,21 @@ export default function Messenger() {
       const { data } = await supabase.from('profiles').select('*').eq('username', username).eq('password', password).single()
       if (data) { 
         setMyUser(data)
-        setView('dashboard') 
+        setView('dashboard')
+        localStorage.setItem('chat_user', JSON.stringify(data)); 
       } else {
         alert("Неверный логин или пароль")
       }
     }
   }
-
+  useEffect(() => {
+    const saved = localStorage.getItem('chat_user');
+    if (saved) {
+      const userData = JSON.parse(saved);
+      setMyUser(userData);
+      setView('dashboard');
+    }
+  }, []);
   // Список чатов
   useEffect(() => {
     if (view === 'dashboard' && myUser) {
@@ -125,7 +133,13 @@ www.nextbrand.com
     <div className="max-w-md mx-auto h-screen bg-white flex flex-col shadow-2xl">
       <div className="p-6 border-b flex justify-between items-center bg-slate-50">
         <span className="font-bold text-xl text-slate-800">TSP chat</span>
-        <button onClick={() => setView('auth')} className="text-red-500 font-bold text-xs">ВЫХОД</button>
+        <button onClick={() => {
+          localStorage.removeItem('chat_user'); // Удаляем данные из памяти
+          setMyUser(null);                      // Сбрасываем текущего пользователя
+          setView('auth');                      // Уходим на экран входа
+        }} className="text-red-500 font-bold text-xs bg-red-50 px-3 py-1 rounded-full hover:bg-red-100">
+          ВЫХОД
+        </button>
       </div>
       <div className="p-4 border-b space-y-2">
         <input className="w-full bg-gray-100 p-4 rounded-xl outline-none" placeholder="Ник друга" onChange={e => setTargetNick(e.target.value)} />
