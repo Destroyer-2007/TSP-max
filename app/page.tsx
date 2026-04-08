@@ -1,6 +1,7 @@
 "use client"
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js'
+import { PushNotifications } from '@capacitor/push-notifications';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -20,6 +21,53 @@ export default function Messenger() {
   const [text, setText] = useState('')
   const [uploading, setUploading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+  // Проверяем, что мы вообще в мобильном приложении, а не в браузере
+  const isPushSupported = typeof window !== 'undefined' && 
+                          window.hasOwnProperty('Capacitor') &&
+                          PushNotifications;
+
+  if (!isPushSupported) {
+    console.log('Уведомления не поддерживаются в этой среде (браузер)');
+    return;
+  }
+
+  const registerPush = async () => {
+    try {
+      // 1. Проверяем разрешения
+      let permStatus = await PushNotifications.checkPermissions();
+
+      if (permStatus.receive === 'prompt') {
+        permStatus = await PushNotifications.requestPermissions();
+      }
+
+      if (permStatus.receive !== 'granted') {
+        return;
+      }
+
+      // 2. Регистрируем
+      await PushNotifications.register();
+
+      // 3. Добавляем слушателей (удаляем старые, чтобы не множились)
+      await PushNotifications.removeAllListeners();
+
+      PushNotifications.addListener('registration', (token) => {
+        alert('Токен получен!');
+        console.log('Token:', token.value);
+      });
+
+      PushNotifications.addListener('registrationError', (err) => {
+        alert('Ошибка регистрации: ' + JSON.stringify(err));
+      });
+
+    } catch (e) {
+      console.error('Ошибка в блоке уведомлений:', e);
+    }
+  };
+
+  registerPush();
+}, []);
 
   // Логика Входа и Регистрации
   const handleAuth = async () => {

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "123411369267",
+    "project_id": "tsp-chat",
+    "storage_bucket": "tsp-chat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123411369267:android:468f62aaab7758b6210246",
+        "android_client_info": {
+          "package_name": "com.mychat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBybhGMRG05ObusbWyLdZxOsz2AKnzWRIY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
