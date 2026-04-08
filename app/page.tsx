@@ -53,12 +53,11 @@ export default function Messenger() {
       await PushNotifications.removeAllListeners();
 
       PushNotifications.addListener('registration', (token) => {
-        alert('Токен получен!');
         console.log('Token:', token.value);
       });
 
       PushNotifications.addListener('registrationError', (err) => {
-        alert('Ошибка регистрации: ' + JSON.stringify(err));
+        console.error('Ошибка регистрации Push:', JSON.stringify(err));
       });
 
     } catch (e) {
